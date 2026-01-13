@@ -27,13 +27,19 @@
   },
   "user_infos": [
     {
-      "name": "张三",
+      "name": "张鑫",
       "id_type": "身份证",
-      "id_number": "110101199001011234",
-      "phone": "13800138000"
+      "id_number": "431202200310123614",
+      "phone": "17718260175"
+    },
+    {
+      "name": "方梦茹",
+      "id_type": "身份证",
+      "id_number": "340221200009011003",
+      "phone": "18053332041"
     }
   ],
-  "selected_user_index": 0,
+  "selected_user_index": 1,
   "exchange_location": {
     "name": "辽宁省分行",
     "cascade_path": [

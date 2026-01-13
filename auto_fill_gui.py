@@ -9,6 +9,9 @@ import tkinter as tk
 from tkinter import ttk, scrolledtext, messagebox
 from threading import Thread
 from playwright.async_api import async_playwright
+import subprocess
+import os
+import tempfile
 
 class UserInfoEditorDialog(tk.Toplevel):
     """身份信息编辑对话框"""
@@ -197,8 +200,8 @@ class LocationEditorDialog(tk.Toplevel):
 class AutoFillerGUI:
     def __init__(self):
         self.window = tk.Tk()
-        self.window.title("也许纪念钞预约 - 超高速自动填写")
-        self.window.geometry("600x800")
+        self.window.title("也许纪念钞预约")
+        self.window.geometry("600x900")
         self.window.resizable(False, False)
         
         # 设置主题色
@@ -249,7 +252,62 @@ class AutoFillerGUI:
         main_frame = tk.Frame(self.window, bg=self.bg_color, padx=20, pady=15)
         main_frame.pack(fill=tk.BOTH, expand=True)
         
-        # 2. 银行配置区域
+        # 2. 浏览器管理区域
+        browser_frame = tk.LabelFrame(main_frame, text="🌐 浏览器管理", font=("微软雅黑", 10, "bold"), bg=self.bg_color, fg="#333", padx=10, pady=10)
+        browser_frame.pack(fill=tk.X, pady=(0, 10))
+        
+        browser_btn_frame = tk.Frame(browser_frame, bg=self.bg_color)
+        browser_btn_frame.pack(fill=tk.X)
+        
+        tk.Button(
+            browser_btn_frame, 
+            text="🚀 启动浏览器", 
+            command=self.start_single_browser, 
+            bg="#4CAF50", 
+            fg="white", 
+            font=("微软雅黑", 9, "bold"), 
+            relief=tk.FLAT, 
+            padx=15, 
+            pady=5,
+            width=12
+        ).pack(side=tk.LEFT, padx=5)
+        
+        tk.Button(
+            browser_btn_frame, 
+            text="🚀✖️ 启动多个浏览器", 
+            command=self.start_multiple_browsers, 
+            bg="#2196F3", 
+            fg="white", 
+            font=("微软雅黑", 9, "bold"), 
+            relief=tk.FLAT, 
+            padx=15, 
+            pady=5,
+            width=14
+        ).pack(side=tk.LEFT, padx=5)
+        
+        # 浏览器数量输入
+        tk.Label(browser_btn_frame, text="窗口数量:", font=("微软雅黑", 9), bg=self.bg_color).pack(side=tk.LEFT, padx=(10, 5))
+        self.browser_count_var = tk.StringVar(value="1")
+        browser_count_spinbox = tk.Spinbox(
+            browser_btn_frame, 
+            from_=1, 
+            to=10, 
+            textvariable=self.browser_count_var, 
+            width=5, 
+            font=("微软雅黑", 9)
+        )
+        browser_count_spinbox.pack(side=tk.LEFT)
+        
+        # 提示标签
+        tk.Label(
+            browser_frame, 
+            text="💡 提示: 启动浏览器后，在浏览器中手动打开预约页面，然后点击\"连接\"按钮", 
+            font=("微软雅黑", 8), 
+            bg=self.bg_color, 
+            fg="#666"
+        ).pack(anchor=tk.W, pady=(5, 0))
+        
+        # 3. 银行配置区域
         bank_frame = tk.LabelFrame(main_frame, text="🏦 银行选择", font=("微软雅黑", 10, "bold"), bg=self.bg_color, fg="#333", padx=10, pady=10)
         bank_frame.pack(fill=tk.X, pady=(0, 10))
         
@@ -265,7 +323,7 @@ class AutoFillerGUI:
         self.bank_combo.pack(anchor=tk.W)
         self.bank_combo.bind("<<ComboboxSelected>>", self.on_bank_changed)
         
-        # 3. 身份信息管理区域
+        # 4. 身份信息管理区域
         user_frame = tk.LabelFrame(main_frame, text="👥 身份信息配置 (支持多选)", font=("微软雅黑", 10, "bold"), bg=self.bg_color, fg="#333", padx=10, pady=10)
         user_frame.pack(fill=tk.X, pady=5)
         
@@ -306,7 +364,7 @@ class AutoFillerGUI:
         tk.Button(btn_box, text="🔗 连接选中", command=self.connect_selected, width=10, bg="#FF9800", fg="white", relief=tk.FLAT).pack(side=tk.RIGHT, padx=5)
         tk.Button(btn_box, text="⚡ 填写选中", command=self.fill_selected, width=10, bg="#9C27B0", fg="white", relief=tk.FLAT).pack(side=tk.RIGHT, padx=5)
 
-        # 4. 网点配置区域
+        # 5. 网点配置区域
         location_frame = tk.LabelFrame(main_frame, text="📍 兑换网点配置", font=("微软雅黑", 10, "bold"), bg=self.bg_color, fg="#333", padx=10, pady=10)
         location_frame.pack(fill=tk.X, pady=5)
         
@@ -328,7 +386,7 @@ class AutoFillerGUI:
         
         tk.Button(loc_inner, text="编辑网点", command=self.edit_location, bg="#FF9800", fg="white", relief=tk.FLAT, padx=10).pack(side=tk.LEFT, padx=5)
         
-        # 5. 数量配置
+        # 6. 数量配置
         qty_frame = tk.Frame(main_frame, bg=self.bg_color)
         qty_frame.pack(fill=tk.X, pady=10)
         
@@ -337,7 +395,7 @@ class AutoFillerGUI:
         self.qty_entry.pack(side=tk.LEFT, padx=10)
         self.qty_entry.insert(0, "20")
         
-        # 6. 主要操作按钮
+        # 7. 主要操作按钮
         action_frame = tk.Frame(main_frame, bg=self.bg_color)
         action_frame.pack(fill=tk.X, pady=10)
         
@@ -348,8 +406,9 @@ class AutoFillerGUI:
         tk.Button(action_frame, text="🔗 全部连接", command=self.connect_all, bg="#FF9800", fg="white", font=("微软雅黑", 9, "bold"), relief=tk.FLAT, padx=15, pady=5).pack(side=tk.LEFT, padx=5)
         tk.Button(action_frame, text="❌ 全部断开", command=self.disconnect_all, bg="#F44336", fg="white", font=("微软雅黑", 9, "bold"), relief=tk.FLAT, padx=15, pady=5).pack(side=tk.LEFT, padx=5)
         tk.Button(action_frame, text="⚡ 全部填写", command=self.fill_all, bg="#0078d4", fg="white", font=("微软雅黑", 10, "bold"), relief=tk.FLAT, padx=20, pady=5).pack(side=tk.LEFT, padx=5)
+        tk.Button(action_frame, text="🔍 调试元素", command=self.show_debug_info, bg="#9C27B0", fg="white", font=("微软雅黑", 9, "bold"), relief=tk.FLAT, padx=15, pady=5).pack(side=tk.LEFT, padx=5)
         
-        # 7. 日志区域
+        # 8. 日志区域
         log_label = tk.Label(main_frame, text="📝 运行日志", font=("微软雅黑", 10, "bold"), bg=self.bg_color, fg="#333")
         log_label.pack(anchor=tk.W, pady=(10, 5))
         
@@ -616,7 +675,7 @@ class AutoFillerGUI:
             if idx not in self.browser_instances:
                 Thread(target=lambda i=idx: self._connect_single_browser(i), daemon=True).start()
                 import time
-                time.sleep(0.5)  # 错开启动时间
+                time.sleep(0.1)  # 错开启动时间
     
     def disconnect_all(self):
         """断开所有浏览器连接"""
@@ -667,6 +726,13 @@ class AutoFillerGUI:
                 self.page_instances[user_index] = page
                 self.log(f"✅ 用户 [{user_name}] 已连接 (端口:{port}, URL:{page.url})")
                 self.window.after(0, lambda: self.update_user_status(user_index, '✅ 已连接'))
+                
+                # 连接成功后自动开始填写
+                import time
+                time.sleep(0.5)  # 稍等一下确保页面稳定
+                self.log(f"⚡ 自动开始为 [{user_name}] 填写...")
+                user_data = self.user_infos[user_index]
+                Thread(target=lambda: self._fill_single_user(user_index, user_data), daemon=True).start()
             else:
                 self.log(f"❌ 用户 [{user_name}] 连接失败: 未找到页面 (端口:{port})")
                 self.window.after(0, lambda: self.update_user_status(user_index, '❌ 连接失败'))
@@ -688,6 +754,156 @@ class AutoFillerGUI:
                 self.window.after(0, lambda: self.update_user_status(user_index, '⚪ 未连接'))
         except Exception as e:
             self.log(f"❌ 断开失败: {e}")
+    
+    def _fill_single_user(self, user_index, user_data):
+        """为单个用户执行自动填写"""
+        try:
+            user_name = user_data['name']
+            page = self.page_instances.get(user_index)
+            
+            if not page:
+                self.log(f"❌ 用户 [{user_name}] 未找到页面实例")
+                return
+            
+            self.window.after(0, lambda: self.update_user_status(user_index, '⚡ 填写中...'))
+            self.log(f"[{user_name}] 开始自动填写...")
+            
+            # 调用填写方法
+            self._perform_fill_for_page(page, user_data, user_name)
+            
+            self.log(f"[{user_name}] ✅ 填写完成")
+            self.window.after(0, lambda: self.update_user_status(user_index, '✅ 已填写'))
+            
+        except Exception as e:
+            user_name = user_data.get('name', '未知用户')
+            self.log(f"[{user_name}] ❌ 填写失败: {e}")
+            import traceback
+            self.log(traceback.format_exc())
+            self.window.after(0, lambda: self.update_user_status(user_index, '❌ 填写失败'))
+    
+    def start_single_browser(self):
+        """启动单个调试模式的Chrome浏览器"""
+        try:
+            self.log("🚀 正在启动Chrome浏览器（调试模式）...")
+            
+            # 使用9222端口
+            port = 9222
+            user_data_dir = os.path.join(tempfile.gettempdir(), "chrome_debug_profile")
+            
+            # 查找Chrome可执行文件
+            chrome_paths = [
+                r"C:\Program Files\Google\Chrome\Application\chrome.exe",
+                r"C:\Program Files (x86)\Google\Chrome\Application\chrome.exe",
+                os.path.expandvars(r"%LOCALAPPDATA%\Google\Chrome\Application\chrome.exe"),
+                r"C:\Program Files\Microsoft\Edge\Application\msedge.exe",
+                r"C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe"
+            ]
+            
+            chrome_exe = None
+            for path in chrome_paths:
+                if os.path.exists(path):
+                    chrome_exe = path
+                    break
+            
+            if not chrome_exe:
+                messagebox.showerror("错误", "未找到Chrome或Edge浏览器，请手动安装")
+                self.log("❌ 未找到Chrome或Edge浏览器")
+                return
+            
+            # 启动浏览器
+            cmd = [
+                chrome_exe,
+                f"--remote-debugging-port={port}",
+                f"--user-data-dir={user_data_dir}"
+            ]
+            
+            subprocess.Popen(cmd, shell=False)
+            
+            browser_name = "Edge" if "msedge" in chrome_exe.lower() else "Chrome"
+            self.log(f"✅ {browser_name}浏览器已启动（调试端口: {port}）")
+            self.log("💡 下一步: 在浏览器中打开预约页面，然后点击\"连接\"按钮")
+            
+            messagebox.showinfo(
+                "成功", 
+                f"{browser_name}浏览器已启动！\n\n"
+                f"调试端口: {port}\n\n"
+                "请在浏览器中打开预约页面，\n"
+                "然后点击\"🔗 连接选中\"或\"🔗 全部连接\"按钮"
+            )
+            
+        except Exception as e:
+            self.log(f"❌ 启动浏览器失败: {e}")
+            messagebox.showerror("错误", f"启动浏览器失败:\n{e}")
+    
+    def start_multiple_browsers(self):
+        """启动多个调试模式的Chrome浏览器"""
+        try:
+            # 获取窗口数量
+            try:
+                num_windows = int(self.browser_count_var.get())
+                if num_windows < 1 or num_windows > 10:
+                    messagebox.showwarning("提示", "窗口数量必须在1-10之间")
+                    return
+            except ValueError:
+                messagebox.showwarning("提示", "请输入有效的窗口数量")
+                return
+            
+            self.log(f"🚀 正在启动 {num_windows} 个Chrome浏览器窗口...")
+            
+            # 查找Chrome可执行文件
+            chrome_paths = [
+                r"C:\Program Files\Google\Chrome\Application\chrome.exe",
+                r"C:\Program Files (x86)\Google\Chrome\Application\chrome.exe",
+                os.path.expandvars(r"%LOCALAPPDATA%\Google\Chrome\Application\chrome.exe"),
+                r"C:\Program Files\Microsoft\Edge\Application\msedge.exe",
+                r"C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe"
+            ]
+            
+            chrome_exe = None
+            for path in chrome_paths:
+                if os.path.exists(path):
+                    chrome_exe = path
+                    break
+            
+            if not chrome_exe:
+                messagebox.showerror("错误", "未找到Chrome或Edge浏览器，请手动安装")
+                self.log("❌ 未找到Chrome或Edge浏览器")
+                return
+            
+            browser_name = "Edge" if "msedge" in chrome_exe.lower() else "Chrome"
+            
+            # 启动多个浏览器实例
+            import time
+            for i in range(num_windows):
+                port = 9222 + i
+                user_data_dir = os.path.join(tempfile.gettempdir(), f"chrome_debug_profile_{i}")
+                
+                cmd = [
+                    chrome_exe,
+                    f"--remote-debugging-port={port}",
+                    f"--user-data-dir={user_data_dir}",
+                    "--new-window"
+                ]
+                
+                subprocess.Popen(cmd, shell=False)
+                self.log(f"  ✅ 窗口 {i+1}/{num_windows} 已启动（调试端口: {port}）")
+                time.sleep(0.3)  # 错开启动时间
+            
+            self.log(f"✅ 所有 {num_windows} 个{browser_name}窗口已启动")
+            self.log("💡 下一步: 在每个浏览器窗口中打开预约页面，然后点击\"全部连接\"")
+            
+            messagebox.showinfo(
+                "成功", 
+                f"已启动 {num_windows} 个{browser_name}窗口！\n\n"
+                f"调试端口范围: 9222-{9222+num_windows-1}\n\n"
+                "请在每个浏览器窗口中打开预约页面，\n"
+                "然后点击\"🔗 全部连接\"按钮"
+            )
+            
+        except Exception as e:
+            self.log(f"❌ 启动浏览器失败: {e}")
+            messagebox.showerror("错误", f"启动浏览器失败:\n{e}")
+
 
     def _perform_fill_for_page(self, page, user_data, user_name):
         """为指定页面执行自动填写"""
@@ -736,6 +952,40 @@ class AutoFillerGUI:
             
         time.sleep(0.5)
         
+        # 1.5. 勾选所有checkbox（条款同意等）
+        self.log(f"[{user_name}] ☑️ 勾选条款...")
+        
+        js_code_checkbox = '''() => {
+            let checkedCount = 0;
+            const checkboxes = document.querySelectorAll('input[type="checkbox"], .el-checkbox');
+            
+            checkboxes.forEach(el => {
+                // 如果是原生checkbox
+                if (el.tagName === 'INPUT' && !el.checked) {
+                    el.click();
+                    checkedCount++;
+                }
+                // 如果是element-ui的checkbox
+                else if (el.classList.contains('el-checkbox') && !el.classList.contains('is-checked')) {
+                    el.click();
+                    checkedCount++;
+                }
+            });
+            
+            return { count: checkedCount };
+        }'''
+        
+        try:
+            checkbox_result = self._run_async(page.evaluate(js_code_checkbox))
+            if checkbox_result['count'] > 0:
+                self.log(f"[{user_name}]   ✅ 已勾选 {checkbox_result['count']} 个选项")
+            else:
+                self.log(f"[{user_name}]   ℹ️ 无需勾选")
+        except Exception as e:
+            self.log(f"[{user_name}]   ⚠️ 勾选失败: {e}")
+        
+        time.sleep(0.3)
+        
         # 2. 选择网点
         self.log(f"[{user_name}] 📍 选择网点...")
         
@@ -765,15 +1015,24 @@ class AutoFillerGUI:
                         
                         result = await page.evaluate(f'''async () => {{
                             const targetText = "{text}";
-                            await new Promise(r => setTimeout(r, 300));
-                            
-                            const selectors = ['li', '[role="menuitem"]', '.el-cascader-node'];
+                            await new Promise(r => setTimeout(r, 50));                             
+                            const selectors = ['li', '[role="menuitem"]', '.el-cascader-node', '.el-cascader-menu__item'];
                             let found = false;
+                            let availableOptions = [];
                             
                             for(let sel of selectors) {{
                                 const options = document.querySelectorAll(sel);
                                 for(let opt of options) {{
-                                    if(opt.textContent.trim() === targetText && opt.offsetWidth > 0) {{
+                                    const text = opt.textContent.trim();
+                                    // 收集可见选项用于调试
+                                    if(opt.offsetWidth > 0 && text) {{
+                                        availableOptions.push(text);
+                                    }}
+                                    
+                                    // 使用includes进行模糊匹配，更宽松
+                                    if(text.includes(targetText) && opt.offsetWidth > 0) {{
+                                        opt.scrollIntoView({{block: 'nearest'}});
+                                        await new Promise(r => setTimeout(r, 100));
                                         opt.click();
                                         found = true;
                                         break;
@@ -782,7 +1041,13 @@ class AutoFillerGUI:
                                 if(found) break;
                             }}
                             
-                            if(!found) return {{success: false, msg: '未找到选项'}};
+                            if(!found) {{
+                                return {{
+                                    success: false, 
+                                    msg: '未找到选项',
+                                    available: availableOptions.slice(0, 10)  // 返回前10个可选项
+                                }};
+                            }}
                             return {{success: true}};
                         }}''')
                         
@@ -795,7 +1060,119 @@ class AutoFillerGUI:
                         time.sleep(0.3)
                     else:
                         self.log(f"[{user_name}]       ❌ 失败: {result.get('msg', '未知错误')}")
+                        # 如果有可用选项信息，显示出来
+                        available = result.get('available', [])
+                        if available:
+                            self.log(f"[{user_name}]       💡 可选项: {', '.join(available[:5])}")
                         break
+            
+            # 2.5 选择兑换日期（农业银行）
+            if use_cascader:
+                self.log(f"[{user_name}] 📅 选择兑换日期...")
+                
+                js_code_date = '''async () => {
+                    // 点击日期输入框（第11个）
+                    const inputs = document.querySelectorAll('input.el-input__inner[type="text"]');
+                    const dateInput = inputs[11];
+                    
+                    if (!dateInput) {
+                        return {success: false, msg: '未找到日期输入框'};
+                    }
+                    
+                    // 滚动到视图
+                    dateInput.scrollIntoView({block: 'center'});
+                    await new Promise(r => setTimeout(r, 200));
+                    
+                    // 使用focus()方法打开日期选择器
+                    dateInput.focus();
+                    await new Promise(r => setTimeout(r, 300));
+                    
+                    // 等待日期选择器出现
+                    let pickerOpened = false;
+                    for (let i = 0; i < 20; i++) {
+                        await new Promise(r => setTimeout(r, 100));
+                        const picker = document.querySelector('.el-date-picker, .el-picker-panel, .el-date-range-picker, [class*="date-picker"]');
+                        if (picker && picker.offsetWidth > 0) {
+                            pickerOpened = true;
+                            break;
+                        }
+                    }
+                    
+                    if (!pickerOpened) {
+                        return {success: false, msg: '日期选择器未打开'};
+                    }
+                    
+                    // 再等待一下确保日历完全渲染
+                    await new Promise(r => setTimeout(r, 300));
+                    
+                    // 查找所有日期单元格
+                    const allCells = document.querySelectorAll('.el-date-table td, .el-picker-panel__body td, [class*="date-table"] td');
+                    let found = false;
+                    let availableDates = [];
+                    
+                    for (let cell of allCells) {
+                        // 跳过完全禁用的单元格
+                        if (cell.classList.contains('disabled')) {
+                            continue;
+                        }
+                        
+                        // 获取单元格中的所有文本
+                        const cellText = cell.textContent.trim();
+                        
+                        // 尝试匹配20
+                        if (cellText === '20') {
+                            // 检查是否是本月的日期（不是上月或下月）
+                            if (!cell.classList.contains('prev-month') && 
+                                !cell.classList.contains('next-month')) {
+                                // 尝试点击
+                                cell.click();
+                                await new Promise(r => setTimeout(r, 200));
+                                found = true;
+                                break;
+                            }
+                        }
+                        
+                        // 收集可用日期
+                        if (!cell.classList.contains('prev-month') && 
+                            !cell.classList.contains('next-month') &&
+                            !cell.classList.contains('disabled')) {
+                            availableDates.push(cellText);
+                        }
+                    }
+                    
+                    if (found) {
+                        return {success: true, date: '2026-01-20'};
+                    } else {
+                        return {
+                            success: false, 
+                            msg: '未找到20号',
+                            available: availableDates
+                        };
+                    }
+                }'''
+                
+                try:
+                    date_result = self._run_async(page.evaluate(js_code_date))
+                    if date_result.get('success'):
+                        open_method = date_result.get('openMethod', '未知')
+                        self.log(f"[{user_name}]   ✅ 已选择: {date_result.get('date', '2026-01-20')} | 打开方式: {open_method}")
+                    else:
+                        self.log(f"[{user_name}]   ⚠️ 日期选择失败: {date_result.get('msg', '未知错误')}")
+                        open_method = date_result.get('openMethod', '')
+                        if open_method:
+                            self.log(f"[{user_name}]   ℹ️ 选择器打开方式: {open_method}")
+                        available = date_result.get('available', [])
+                        if available:
+                            self.log(f"[{user_name}]   💡 可选日期: {', '.join(available[:15])}")
+                        total = date_result.get('totalCells', 0)
+                        if total > 0:
+                            self.log(f"[{user_name}]   🔍 找到 {total} 个日期单元格")
+                except Exception as e:
+                    self.log(f"[{user_name}]   ⚠️ 日期选择出错: {e}")
+                    import traceback
+                    self.log(traceback.format_exc())
+                
+                time.sleep(0.3)
         else:
             # 工商银行：独立下拉框
             self._perform_icbc_location_selection(page, self.current_location.get("icbc_location", {}), field_indices, user_name)
@@ -872,6 +1249,7 @@ class AutoFillerGUI:
         
     def _integrated_fill_thread(self, user_data):
         try:
+            current_bank = self.bank_var.get()
             bank_config = self.config.get("bank_configs", {}).get(current_bank, {})
             field_indices = bank_config.get("field_indices", {})
             use_cascader = bank_config.get("use_cascader", True)
@@ -1005,7 +1383,7 @@ class AutoFillerGUI:
                             self.log(f"      ❌ 失败: {result.get('msg', '未知错误')}")
                             break
             else:
-                self._perform_icbc_location_selection(self.current_location.get("icbc_location", {}), field_indices)
+                self._perform_icbc_location_selection(self.page, self.current_location.get("icbc_location", {}), field_indices, user_data.get('name', '未知用户'))
                 
             self.log("\n✅ 自动操作完成！")
             
@@ -1161,10 +1539,10 @@ class AutoFillerGUI:
         for log in result['logs']:
             self.log(log)
 
-    def _perform_icbc_location_selection(self, loc_data, indices):
+    def _perform_icbc_location_selection(self, page, loc_data, indices, user_name):
         """执行工商银行多下拉选择"""
         if not loc_data:
-            self.log("❌ 未配置网点信息")
+            self.log(f"[{user_name}] ❌ 未配置网点信息")
             return
             
         targets = [
@@ -1214,33 +1592,96 @@ class AutoFillerGUI:
             }}
         }}'''
         
-        result = self._run_async(self.page.evaluate(js_code))
+        result = self._run_async(page.evaluate(js_code))
         for log in result['logs']:
-            self.log(log)
+            self.log(f"[{user_name}]   {log}")
 
     def show_debug_info(self):
-        self.log("🔍 正在获取页面元素...")
-        self.debug_btn.config(state=tk.DISABLED)
+        """显示选中用户的页面调试信息"""
+        selection = self.user_tree.selection()
+        if not selection:
+            messagebox.showwarning("提示", "请先选择要调试的用户")
+            return
+        
+        user_index = int(selection[0])
+        if user_index not in self.page_instances:
+            messagebox.showwarning("提示", "该用户尚未连接浏览器，请先连接")
+            return
+        
+        user_name = self.user_infos[user_index]['name']
+        page = self.page_instances[user_index]
+        
+        self.log(f"🔍 [{user_name}] 正在获取页面元素...")
         
         def _debug_thread():
             try:
                 async def debug():
-                    inputs = await self.page.evaluate('''() => {
-                        return Array.from(document.querySelectorAll('input.el-input__inner')).map((el, i) => 
-                            `[${i}] ${el.placeholder || '无占位符'} (Val: ${el.value})`
-                        )
+                    # 获取所有输入框
+                    inputs = await page.evaluate('''() => {
+                        const result = {
+                            textInputs: [],
+                            checkboxes: [],
+                            selects: [],
+                            buttons: []
+                        };
+                        
+                        // 文本输入框
+                        document.querySelectorAll('input[type="text"], input.el-input__inner').forEach((el, i) => {
+                            result.textInputs.push(`[${i}] ${el.placeholder || el.name || '无标识'} | 值: ${el.value || '空'}`);
+                        });
+                        
+                        // 复选框
+                        document.querySelectorAll('input[type="checkbox"], .el-checkbox').forEach((el, i) => {
+                            const label = el.nextElementSibling?.textContent || el.parentElement?.textContent || '无标签';
+                            const checked = el.checked || el.classList.contains('is-checked');
+                            result.checkboxes.push(`[${i}] ${label.trim().substring(0, 50)} | 状态: ${checked ? '已勾选' : '未勾选'}`);
+                        });
+                        
+                        // 下拉框
+                        document.querySelectorAll('select, .el-select').forEach((el, i) => {
+                            const label = el.getAttribute('placeholder') || '无标识';
+                            result.selects.push(`[${i}] ${label}`);
+                        });
+                        
+                        // 按钮
+                        document.querySelectorAll('button').forEach((el, i) => {
+                            const text = el.textContent.trim();
+                            if (text) {
+                                result.buttons.push(`[${i}] ${text.substring(0, 30)}`);
+                            }
+                        });
+                        
+                        return result;
                     }''')
                     return inputs
                     
                 result = self._run_async(debug())
-                for info in result:
-                    self.log(info)
+                
+                self.log(f"[{user_name}] === 📝 文本输入框 ({len(result['textInputs'])}) ===")
+                for info in result['textInputs']:
+                    self.log(f"[{user_name}]   {info}")
+                
+                self.log(f"[{user_name}] === ☑️ 复选框 ({len(result['checkboxes'])}) ===")
+                for info in result['checkboxes']:
+                    self.log(f"[{user_name}]   {info}")
+                    
+                self.log(f"[{user_name}] === 🔽 下拉框 ({len(result['selects'])}) ===")
+                for info in result['selects']:
+                    self.log(f"[{user_name}]   {info}")
+                
+                self.log(f"[{user_name}] === 🔘 按钮 ({len(result['buttons'])}) ===")
+                for info in result['buttons']:
+                    self.log(f"[{user_name}]   {info}")
+                    
+                self.log(f"[{user_name}] ✅ 调试信息获取完成")
+                
             except Exception as e:
-                self.log(f"调试出错: {e}")
-            finally:
-                self.window.after(0, lambda: self.debug_btn.config(state=tk.NORMAL))
+                self.log(f"[{user_name}] ❌ 调试出错: {e}")
+                import traceback
+                self.log(traceback.format_exc())
                 
         Thread(target=_debug_thread, daemon=True).start()
+
 
     def run(self):
         self.window.mainloop()
