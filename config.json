@@ -1,0 +1,59 @@
+{
+  "bank": "农业银行",
+  "bank_configs": {
+    "农业银行": {
+      "field_indices": {
+        "name": 0,
+        "id_number": 2,
+        "phone": 3,
+        "quantity": 10,
+        "cascader": 6
+      },
+      "use_cascader": true
+    },
+    "工商银行": {
+      "field_indices": {
+        "name": 0,
+        "id_number": 1,
+        "phone": 2,
+        "province": 3,
+        "city": 4,
+        "district": 5,
+        "outlet": 6,
+        "quantity": 7
+      },
+      "use_cascader": false
+    }
+  },
+  "user_infos": [
+    {
+      "name": "张三",
+      "id_type": "身份证",
+      "id_number": "110101199001011234",
+      "phone": "13800138000"
+    }
+  ],
+  "selected_user_index": 0,
+  "exchange_location": {
+    "name": "辽宁省分行",
+    "cascade_path": [
+      "辽宁省分行",
+      "沈阳分行",
+      "皇姑支行",
+      "皇姑支行营业室"
+    ],
+    "icbc_location": {
+      "province": "辽宁省",
+      "city": "沈阳市",
+      "district": "皇姑区",
+      "outlet": "沈阳皇姑支行营业室"
+    }
+  },
+  "quantity": 20,
+  "target_url": "http://纪念钞.vip:8888/new-abchina",
+  "settings": {
+    "auto_submit": false,
+    "use_ocr": true,
+    "timeout": 5000
+  }
+}
